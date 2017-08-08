@@ -8,6 +8,8 @@ import json
 # Scrapes recipes off of allrecipes.com
 # Go to a maximum of 100 pages.
 
+# ------ Recipe Link functions ------
+
 
 def get_links(page_num, recipe_array):
     # Grabs all links on a page, and then appends it to a list.
@@ -31,19 +33,30 @@ def get_links(page_num, recipe_array):
 def write_recipe_links(recipe_array):
     # Write to a file.
     opened_file = open("recipe_links.txt", "w", encoding="utf-8")
-    # TODO: Change mode to append.
+    # TODO: Possibly change mode to append?
     with opened_file as file:
         for link in recipe_array:
             file.write(link)
             file.write('\n')  # Newline as the delimiter.
 
 
-def write_recipe_info(recipe):
-    # Saves recipe info into a json file.
-    # Recipe is a dictionary (object, json)
-    opened_file = open("recipes.json", "a", encoding="utf-8")
+def grab_links(num_links):
+    # It's like main, but for recipe links.
+    link_array = []
+    for i in range(num_links):
+        get_links(i, link_array)   # Make this portion multithreaded.
+    link_array = list(set(link_array))  # Remove duplicates. Seems like a hack.
+    write_recipe_links(link_array)
+
+# ------ Recipe functions ------
+
+
+def load_recipe_links(recipe_queue):
+    # Loads recipes into the queue.
+    opened_file = open("recipe_links.txt", "r", encoding="utf-8")
     with opened_file as file:
-        json.dump(recipe, file)
+        for link in file:
+            recipe_queue.put(link)
 
 
 def parse_recipe(link, recipe_dict):
@@ -57,25 +70,13 @@ def parse_recipe(link, recipe_dict):
     # Store results in a dictionary.
     recipe_dict[title[0]] = {'ingredients': ingredients, 'directions': directions}
 
-# def populate_queue(page):
-    # Populates the queue with recipe links, starting from the page in the arg.
 
-
-def load_recipe_links(recipe_queue):
-    # Loads recipes into the queue.
-    opened_file = open("recipe_links.txt", "r", encoding="utf-8")
+def write_recipe_info(recipe):
+    # Saves recipe info into a json file.
+    # Recipe is a dictionary (object, json)
+    opened_file = open("recipes.json", "a", encoding="utf-8")
     with opened_file as file:
-        for link in file:
-            recipe_queue.put(link)
-
-
-def grab_links(num_links):
-    # Put links into an array, and then write the entire array.
-    link_array = []
-    for i in range(num_links):
-        get_links(i, link_array)   # Make this portion multithreaded.
-    link_array = list(set(link_array))  # Remove duplicates. Seems like a hack.
-    write_recipe_links(link_array)
+        json.dump(recipe, file)
 
 
 def grab_all_recipes():
@@ -83,8 +84,9 @@ def grab_all_recipes():
     recipe_queue = Queue()
     load_recipe_links(recipe_queue)
     recipe_dict = {}
-    #while not recipe_queue.empty():
-    parse_recipe(recipe_queue.get(), recipe_dict)
+    while not recipe_queue.empty():
+        parse_recipe(recipe_queue.get(), recipe_dict)
+    write_recipe_info(recipe_dict)
 
 
 def main():
