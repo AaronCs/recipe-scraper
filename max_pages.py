@@ -7,6 +7,9 @@ import logging
 # I probably don't need to figure out the maximum recipe pages there are, but
 # it seems like a good way to test out threading.
 
+worker_queue = Queue()
+worker_lock = threading.Lock()
+
 
 def find_max_pages(i):
     # Change page_link to find max pages of different things.
@@ -28,11 +31,14 @@ def find_max_pages(i):
 
 
 def max_page_worker(page_num):
-    find_max_pages(page_num)
+    with worker_lock:
+        find_max_pages(page_num)
 
 
 def threader(num_threads):
     # Put numbers in the queue and have the workers go through it?
+    for i in range(500):
+        worker_queue.put(i)
     for i in range(num_threads + 1):
         # TODO: Modify args into something else.
         # i.e: if another worker is already on that number, then skip ahead.
