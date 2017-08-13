@@ -1,9 +1,9 @@
 from lxml import html
-from queue import Queue
-import threading
+from multiprocessing import Pool
 import requests
 import logging
 import json
+import time
 
 # Scrapes recipes off of allrecipes.com
 # Go to a maximum of 100 pages.
@@ -41,7 +41,7 @@ def write_recipe_links(recipe_array):
 
 
 def grab_links(num_links):
-    # It's like main, but for recipe links.
+    # Wrapper function for writing recipe links.
     link_array = []
     for i in range(num_links):
         get_links(i, link_array)   # Make this portion multithreaded.
@@ -51,15 +51,15 @@ def grab_links(num_links):
 # ------ Recipe functions ------
 
 
-def load_recipe_links(recipe_queue):
-    # Loads recipes into the queue.
+def load_recipe_links(recipe_links):
+    # Loads recipes into the array.
     opened_file = open("recipe_links.txt", "r", encoding="utf-8")
     with opened_file as file:
         for link in file:
-            recipe_queue.put(link)
+            recipe_links.append(link)
 
 
-def parse_recipe(link, recipe_dict):
+def parse_recipe(link):
     # Parses the recipe ingredients and steps.
     to_parse = 'http://allrecipes.com{0}'.format(link).rstrip()  # rstrip removes the newline.
     page = requests.get(to_parse, timeout=5)
@@ -68,29 +68,43 @@ def parse_recipe(link, recipe_dict):
     ingredients = tree.xpath("//span[@itemprop='ingredients']/text()")
     directions = tree.xpath("//span[@class='recipe-directions__list--item']/text()")
     # Store results in a dictionary.
-    recipe_dict[title[0]] = {'ingredients': ingredients, 'directions': directions}
+    # recipe_dict[title[0]] = {'ingredients': ingredients, 'directions': directions}
+    return [title[0], ingredients, directions]
 
 
 def write_recipe_info(recipe):
     # Saves recipe info into a json file.
     # Recipe is a dictionary (object, json)
-    opened_file = open("recipes.json", "a", encoding="utf-8")
+    opened_file = open("recipes.json", "w", encoding="utf-8")
     with opened_file as file:
         json.dump(recipe, file)
 
 
 def grab_all_recipes():
-    # It's like main, but for recipes, not recipe links.
-    recipe_queue = Queue()
-    load_recipe_links(recipe_queue)
+    # Wrapper function for writing recipes.
+    # recipe_queue = Queue()  # It's faster with queues for some reason.
+    recipe_links = []
     recipe_dict = {}
-    while not recipe_queue.empty():
-        parse_recipe(recipe_queue.get(), recipe_dict)
+    pool = Pool(10)
+
+    load_recipe_links(recipe_links)
+    with pool as pool:
+        # for link in recipe_links:
+        recipes = pool.map(parse_recipe, recipe_links)  # WOOO I DID IT! IT MULTIPROCESSES STUFF!
+        for recipe in recipes:
+            recipe_dict[recipe[0]] = {'ingredients': recipe[1], 'directions': recipe[2]}
+            # I could probably speed it up somehow by doing this a different way?
+        # recipe = parse_recipe(link)  # Figure out how to multiprocess this. HAHA I DID IT!
     write_recipe_info(recipe_dict)
 
 
 def main():
+    # grab_links(1)
+    start = time.time()
     grab_all_recipes()
+    end = time.time()
+    print("Elapsed time (sec): ")
+    print(end - start)
 
 
 if __name__ == "__main__":
