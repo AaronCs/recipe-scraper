@@ -4,36 +4,28 @@ import requests
 import logging
 import json
 import time
+from fake_useragent import UserAgent
 
 # Scrapes recipes off of allrecipes.com
-# Go to a maximum of 100 pages.
+# TODO: Links grabber should only fire in certain cases to reduce runtime.
 
 # ------ Recipe Link functions ------
 
 
-def get_links(page_num, recipe_array):
+def get_links(page_num):
     # Grabs all links on a page, and then appends it to a list.
     # The list will later be written into a file.
     page_link = 'http://allrecipes.com/recipes/?page={0}#{0}'.format(page_num)
     page = requests.get(page_link, timeout=5)
     tree = html.fromstring(page.content)
     links = tree.xpath("//article[@class='grid-col--fixed-tiles']/a/@href")
-    for i in links:
-        recipe_array.append(i)
-    # logging.info(links)
 
-    """
-    categories = tree.xpath("//a[@class='hero-link__item']/span/text()")
-    links = tree.xpath("//a[@class='hero-link__item']/@href")
-    """
-
-    # return links
+    return links
 
 
 def write_recipe_links(recipe_array):
     # Write to a file.
     opened_file = open("recipe_links.txt", "w", encoding="utf-8")
-    # TODO: Possibly change mode to append?
     with opened_file as file:
         for link in recipe_array:
             file.write(link)
@@ -42,11 +34,15 @@ def write_recipe_links(recipe_array):
 
 def grab_links(num_links):
     # Wrapper function for writing recipe links.
-    link_array = []
-    for i in range(num_links):
-        get_links(i, link_array)   # Make this portion multithreaded.
+    # link_array = []
+    pool = Pool(5)
+
+    with pool as pool:
+            links = pool.map(get_links, range(num_links)) # Returns an array of an array.
+            link_array = [link for subarray in links for link in subarray]
+            # ^ Unpacks the links array of arrays into a flat array.
     link_array = list(set(link_array))  # Remove duplicates. Seems like a hack.
-    write_recipe_links(link_array)
+    write_recipe_links(link_array)  # Saves the links.
 
 # ------ Recipe functions ------
 
@@ -69,6 +65,8 @@ def parse_recipe(link):
     directions = tree.xpath("//span[@class='recipe-directions__list--item']/text()")
     # Store results in a dictionary.
     # recipe_dict[title[0]] = {'ingredients': ingredients, 'directions': directions}
+    if not title:
+        raise ValueError("No title? Link: https://allrecipes.com" + link)
     return [title[0], ingredients, directions]
 
 
@@ -99,12 +97,22 @@ def grab_all_recipes():
 
 
 def main():
+    ua = UserAgent()
+    headers = {'user-agent': ua.random}
+    page_link = 'http://allrecipes.com/'
+    page = requests.get(page_link, headers=headers, timeout=5)
+    print(page)
+
+    '''
+    
     # grab_links(1)
     start = time.time()
-    grab_all_recipes()
+    # grab_all_recipes()
+    grab_links(10)
     end = time.time()
     print("Elapsed time (sec): ")
     print(end - start)
+    '''
 
 
 if __name__ == "__main__":
